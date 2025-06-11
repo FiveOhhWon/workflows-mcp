@@ -1,5 +1,7 @@
 # workflows-mcp
 
+> 🤖 **Co-authored with [Claude Code](https://claude.ai/referral/uralRLy1tw)** - Building workflows so LLMs can finally follow a recipe without burning the kitchen! 🔥
+
 A powerful Model Context Protocol (MCP) implementation that enables LLMs to execute complex, multi-step workflows with cognitive actions and tool integrations.
 
 ## 🌟 Overview
