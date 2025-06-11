@@ -1,0 +1,109 @@
+{
+  "id": "example-research-assistant",
+  "name": "Research Assistant Workflow",
+  "description": "Comprehensive research workflow that gathers, validates, and synthesizes information from multiple sources",
+  "goal": "Produce a well-researched report on a given topic",
+  "version": "1.0.0",
+  "tags": ["research", "analysis", "report"],
+  "inputs": {
+    "research_topic": {
+      "type": "string",
+      "description": "The topic to research",
+      "required": true
+    },
+    "sources_count": {
+      "type": "number",
+      "description": "Number of sources to consider",
+      "required": false,
+      "default": 5
+    },
+    "report_length": {
+      "type": "string",
+      "description": "Desired report length: brief, standard, comprehensive",
+      "required": false,
+      "default": "standard"
+    }
+  },
+  "outputs": ["research_report", "source_citations", "key_findings"],
+  "steps": [
+    {
+      "id": 1,
+      "action": "extract",
+      "description": "Parse and understand the research question",
+      "input_from": ["research_topic"],
+      "save_result_as": "parsed_question",
+      "error_handling": "stop"
+    },
+    {
+      "id": 2,
+      "action": "research",
+      "description": "Search for relevant information across available sources",
+      "input_from": ["parsed_question", "sources_count"],
+      "save_result_as": "raw_sources",
+      "error_handling": "continue"
+    },
+    {
+      "id": 3,
+      "action": "validate",
+      "description": "Verify source credibility and relevance",
+      "input_from": ["raw_sources"],
+      "criteria": "Check source authority, recency, bias, and relevance to topic",
+      "save_result_as": "validated_sources",
+      "error_handling": "continue"
+    },
+    {
+      "id": 4,
+      "action": "analyze",
+      "description": "Analyze information from validated sources",
+      "input_from": ["validated_sources", "parsed_question"],
+      "save_result_as": "source_analysis",
+      "error_handling": "continue"
+    },
+    {
+      "id": 5,
+      "action": "extract",
+      "description": "Extract key findings and insights",
+      "input_from": ["source_analysis"],
+      "save_result_as": "key_findings",
+      "error_handling": "continue"
+    },
+    {
+      "id": 6,
+      "action": "consider",
+      "description": "Evaluate conflicting information and different perspectives",
+      "input_from": ["source_analysis", "key_findings"],
+      "save_result_as": "perspective_analysis",
+      "error_handling": "continue"
+    },
+    {
+      "id": 7,
+      "action": "summarize",
+      "description": "Consolidate findings into coherent insights",
+      "input_from": ["key_findings", "perspective_analysis"],
+      "save_result_as": "consolidated_findings",
+      "error_handling": "continue"
+    },
+    {
+      "id": 8,
+      "action": "compose",
+      "description": "Write the research report",
+      "input_from": ["consolidated_findings", "report_length"],
+      "save_result_as": "research_report",
+      "error_handling": "stop"
+    },
+    {
+      "id": 9,
+      "action": "compose",
+      "description": "Format source citations",
+      "input_from": ["validated_sources"],
+      "save_result_as": "source_citations",
+      "error_handling": "continue"
+    }
+  ],
+  "metadata": {
+    "created_at": "2025-06-11T02:00:00Z",
+    "updated_at": "2025-06-11T02:00:00Z",
+    "times_run": 0
+  },
+  "is_deleted": false
+}

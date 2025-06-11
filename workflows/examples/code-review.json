@@ -1,0 +1,96 @@
+{
+  "id": "example-code-review",
+  "name": "Code Review Workflow",
+  "description": "Automated code review workflow that analyzes code quality, identifies issues, and provides improvement suggestions",
+  "goal": "Perform comprehensive code review with actionable feedback",
+  "version": "1.0.0",
+  "tags": ["code-review", "quality", "automation"],
+  "inputs": {
+    "file_path": {
+      "type": "string",
+      "description": "Path to the code file to review",
+      "required": true
+    },
+    "language": {
+      "type": "string",
+      "description": "Programming language of the code",
+      "required": true
+    },
+    "review_depth": {
+      "type": "string",
+      "description": "Depth of review: quick, standard, or thorough",
+      "required": false,
+      "default": "standard"
+    }
+  },
+  "outputs": ["review_summary", "issues_found", "improvement_suggestions"],
+  "required_tools": ["read_file"],
+  "steps": [
+    {
+      "id": 1,
+      "action": "tool_call",
+      "tool_name": "read_file",
+      "description": "Read the code file to review",
+      "parameters": {
+        "path": "{{file_path}}"
+      },
+      "save_result_as": "code_content",
+      "error_handling": "stop"
+    },
+    {
+      "id": 2,
+      "action": "analyze",
+      "description": "Analyze code structure, patterns, and potential issues",
+      "input_from": ["code_content", "language"],
+      "save_result_as": "code_analysis",
+      "error_handling": "continue"
+    },
+    {
+      "id": 3,
+      "action": "research",
+      "description": "Research best practices for the programming language",
+      "input_from": ["language"],
+      "save_result_as": "best_practices",
+      "error_handling": "continue"
+    },
+    {
+      "id": 4,
+      "action": "validate",
+      "description": "Validate code against coding standards and best practices",
+      "input_from": ["code_analysis", "best_practices"],
+      "criteria": "Check for naming conventions, code organization, error handling, security issues",
+      "save_result_as": "validation_results",
+      "error_handling": "continue"
+    },
+    {
+      "id": 5,
+      "action": "extract",
+      "description": "Extract specific issues and code smells",
+      "input_from": ["validation_results"],
+      "save_result_as": "issues_found",
+      "error_handling": "continue"
+    },
+    {
+      "id": 6,
+      "action": "compose",
+      "description": "Create detailed improvement suggestions",
+      "input_from": ["issues_found", "best_practices"],
+      "save_result_as": "improvement_suggestions",
+      "error_handling": "continue"
+    },
+    {
+      "id": 7,
+      "action": "summarize",
+      "description": "Create overall review summary with key findings",
+      "input_from": ["code_analysis", "issues_found", "improvement_suggestions"],
+      "save_result_as": "review_summary",
+      "error_handling": "stop"
+    }
+  ],
+  "metadata": {
+    "created_at": "2025-06-11T02:00:00Z",
+    "updated_at": "2025-06-11T02:00:00Z",
+    "times_run": 0
+  },
+  "is_deleted": false
+}

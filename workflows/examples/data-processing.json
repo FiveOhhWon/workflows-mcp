@@ -1,0 +1,125 @@
+{
+  "id": "example-data-processing",
+  "name": "Data Processing Pipeline",
+  "description": "ETL workflow for processing, validating, and transforming data with conditional branching",
+  "goal": "Process raw data into clean, validated, and transformed output",
+  "version": "1.0.0",
+  "tags": ["data", "etl", "processing"],
+  "inputs": {
+    "input_file": {
+      "type": "string",
+      "description": "Path to input data file",
+      "required": true
+    },
+    "output_format": {
+      "type": "string",
+      "description": "Desired output format (json, csv, parquet)",
+      "required": true
+    },
+    "quality_threshold": {
+      "type": "number",
+      "description": "Minimum data quality score (0-1)",
+      "required": false,
+      "default": 0.8
+    }
+  },
+  "required_tools": ["read_file", "write_file"],
+  "steps": [
+    {
+      "id": 1,
+      "action": "tool_call",
+      "tool_name": "read_file",
+      "description": "Load raw data from input file",
+      "parameters": {
+        "path": "{{input_file}}"
+      },
+      "save_result_as": "raw_data",
+      "error_handling": "stop"
+    },
+    {
+      "id": 2,
+      "action": "validate",
+      "description": "Validate data format and structure",
+      "input_from": ["raw_data"],
+      "criteria": "Check for required fields, data types, and format consistency",
+      "save_result_as": "validation_result",
+      "error_handling": "stop"
+    },
+    {
+      "id": 3,
+      "action": "analyze",
+      "description": "Analyze data quality and completeness",
+      "input_from": ["raw_data", "validation_result"],
+      "save_result_as": "quality_analysis",
+      "error_handling": "continue"
+    },
+    {
+      "id": 4,
+      "action": "branch",
+      "description": "Branch based on data quality score",
+      "conditions": [
+        {
+          "if": "quality_analysis.score >= quality_threshold",
+          "goto_step": 5
+        },
+        {
+          "if": "quality_analysis.score < quality_threshold",
+          "goto_step": 8
+        }
+      ],
+      "error_handling": "stop"
+    },
+    {
+      "id": 5,
+      "action": "transform",
+      "description": "Clean and normalize high-quality data",
+      "input_from": ["raw_data"],
+      "transformation": "Remove duplicates, handle missing values, normalize formats",
+      "save_result_as": "cleaned_data",
+      "error_handling": "stop"
+    },
+    {
+      "id": 6,
+      "action": "transform",
+      "description": "Convert data to desired output format",
+      "input_from": ["cleaned_data", "output_format"],
+      "transformation": "Convert to specified format with proper encoding",
+      "save_result_as": "formatted_data",
+      "error_handling": "stop"
+    },
+    {
+      "id": 7,
+      "action": "tool_call",
+      "tool_name": "write_file",
+      "description": "Save processed data to output file",
+      "parameters": {
+        "path": "processed_{{output_format}}_data",
+        "content": "{{formatted_data}}"
+      },
+      "save_result_as": "output_result",
+      "error_handling": "stop"
+    },
+    {
+      "id": 8,
+      "action": "notify",
+      "description": "Alert about low quality data",
+      "input_from": ["quality_analysis"],
+      "save_result_as": "quality_alert",
+      "error_handling": "continue"
+    },
+    {
+      "id": 9,
+      "action": "compose",
+      "description": "Create data quality report",
+      "input_from": ["quality_analysis", "validation_result"],
+      "save_result_as": "quality_report",
+      "error_handling": "stop"
+    }
+  ],
+  "metadata": {
+    "created_at": "2025-06-11T02:00:00Z",
+    "updated_at": "2025-06-11T02:00:00Z",
+    "times_run": 0
+  },
+  "is_deleted": false
+}
