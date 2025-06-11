@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "workflows-mcp": "./dist/index.js"
+    "workflows-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -35,6 +35,9 @@
     "url": "https://github.com/FiveOhhWon/workflows-mcp/issues"
   },
   "homepage": "https://github.com/FiveOhhWon/workflows-mcp#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^24.0.0",
