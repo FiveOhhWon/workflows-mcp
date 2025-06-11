@@ -21,13 +21,13 @@ workflows-mcp transforms how AI assistants handle complex tasks by providing str
 ### Using npx (recommended)
 
 ```bash
-npx workflows-mcp
+npx @fiveohhwon/workflows-mcp
 ```
 
 ### From npm
 
 ```bash
-npm install -g workflows-mcp
+npm install -g @fiveohhwon/workflows-mcp
 ```
 
 ### From Source
@@ -55,7 +55,7 @@ Add this configuration to your Claude Desktop config file:
   "mcpServers": {
     "workflows": {
       "command": "npx",
-      "args": ["-y", "workflows-mcp"]
+      "args": ["-y", "@fiveohhwon/workflows-mcp"]
     }
   }
 }
