@@ -7,26 +7,26 @@ import { v4 as uuidv4 } from 'uuid';
 export class WorkflowStorage {
   private workflowsDir: string;
   private importsDir: string;
+  private versionsDir: string;
 
   constructor(baseDir?: string) {
     // Use a directory in the user's home directory by default
     const base = baseDir || path.join(homedir(), '.workflows-mcp');
     this.workflowsDir = path.join(base, 'workflows');
     this.importsDir = path.join(base, 'imports');
+    this.versionsDir = path.join(base, 'versions');
   }
 
   async initialize(): Promise<void> {
-    // Create both workflows and imports directories
-    try {
-      await fs.access(this.workflowsDir);
-    } catch {
-      await fs.mkdir(this.workflowsDir, { recursive: true });
-    }
+    // Create all necessary directories
+    const dirs = [this.workflowsDir, this.importsDir, this.versionsDir];
     
-    try {
-      await fs.access(this.importsDir);
-    } catch {
-      await fs.mkdir(this.importsDir, { recursive: true });
+    for (const dir of dirs) {
+      try {
+        await fs.access(dir);
+      } catch {
+        await fs.mkdir(dir, { recursive: true });
+      }
     }
     
     // Import any workflows from the imports directory
@@ -37,7 +37,29 @@ export class WorkflowStorage {
     return path.join(this.workflowsDir, `${id}.json`);
   }
 
+  private getVersionPath(workflowId: string, version: string): string {
+    return path.join(this.versionsDir, workflowId, `v${version}.json`);
+  }
+
+  private async saveVersion(workflow: Workflow): Promise<void> {
+    const versionDir = path.join(this.versionsDir, workflow.id);
+    
+    try {
+      await fs.access(versionDir);
+    } catch {
+      await fs.mkdir(versionDir, { recursive: true });
+    }
+    
+    const versionPath = this.getVersionPath(workflow.id, workflow.version);
+    const data = JSON.stringify(workflow, null, 2);
+    await fs.writeFile(versionPath, data, 'utf-8');
+  }
+
   async save(workflow: Workflow): Promise<void> {
+    // Save the current version to versions directory
+    await this.saveVersion(workflow);
+    
+    // Save the active workflow
     const filePath = this.getWorkflowPath(workflow.id);
     const data = JSON.stringify(workflow, null, 2);
     await fs.writeFile(filePath, data, 'utf-8');
@@ -236,5 +258,72 @@ export class WorkflowStorage {
         console.error('Error importing workflows:', error);
       }
     }
+  }
+
+  async listVersions(workflowId: string): Promise<string[]> {
+    const versionDir = path.join(this.versionsDir, workflowId);
+    
+    try {
+      const files = await fs.readdir(versionDir);
+      return files
+        .filter(f => f.startsWith('v') && f.endsWith('.json'))
+        .map(f => f.slice(1, -5)) // Remove 'v' prefix and '.json' suffix
+        .sort((a, b) => {
+          // Sort versions properly (1.0.0 < 1.0.1 < 1.1.0 < 2.0.0)
+          const aParts = a.split('.').map(Number);
+          const bParts = b.split('.').map(Number);
+          
+          for (let i = 0; i < 3; i++) {
+            if (aParts[i] !== bParts[i]) {
+              return aParts[i] - bParts[i];
+            }
+          }
+          return 0;
+        });
+    } catch {
+      return [];
+    }
+  }
+
+  async getVersion(workflowId: string, version: string): Promise<Workflow | null> {
+    try {
+      const versionPath = this.getVersionPath(workflowId, version);
+      const data = await fs.readFile(versionPath, 'utf-8');
+      return JSON.parse(data) as Workflow;
+    } catch {
+      return null;
+    }
+  }
+
+  async rollback(workflowId: string, targetVersion: string): Promise<boolean> {
+    // Get the version to rollback to
+    const versionWorkflow = await this.getVersion(workflowId, targetVersion);
+    if (!versionWorkflow) {
+      return false;
+    }
+    
+    // Save current as a new version before rollback
+    const current = await this.get(workflowId);
+    if (current) {
+      await this.saveVersion(current);
+    }
+    
+    // Update metadata for rollback
+    versionWorkflow.metadata = {
+      created_at: versionWorkflow.metadata?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      times_run: versionWorkflow.metadata?.times_run || 0,
+      created_by: versionWorkflow.metadata?.created_by,
+      average_duration_ms: versionWorkflow.metadata?.average_duration_ms,
+      success_rate: versionWorkflow.metadata?.success_rate,
+      last_run_at: versionWorkflow.metadata?.last_run_at,
+    };
+    
+    // Save the rolled back version as active
+    const filePath = this.getWorkflowPath(workflowId);
+    const data = JSON.stringify(versionWorkflow, null, 2);
+    await fs.writeFile(filePath, data, 'utf-8');
+    
+    return true;
   }
 }

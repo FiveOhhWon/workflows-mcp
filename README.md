@@ -236,6 +236,24 @@ Workflows are JSON documents that define a series of steps for an LLM to execute
    ```
    Call this after completing each step to proceed through the workflow.
 
+8. **get_workflow_versions** - List all available versions of a workflow
+   ```json
+   {
+     "workflow_id": "workflow-uuid"
+   }
+   ```
+   Returns list of all saved versions for version history tracking.
+
+9. **rollback_workflow** - Rollback a workflow to a previous version
+   ```json
+   {
+     "workflow_id": "workflow-uuid",
+     "target_version": "1.0.0",
+     "reason": "Reverting breaking changes"
+   }
+   ```
+   Restores a previous version as the active workflow.
+
 ## 🔄 Step-by-Step Execution
 
 The workflow system supports interactive, step-by-step execution similar to the sequential thinking tool:
@@ -353,7 +371,13 @@ npm run typecheck
 
 ## 📝 Changelog
 
-### v0.2.1 (Latest)
+### v0.3.0 (Latest)
+- ✨ Added workflow versioning with automatic version history
+- ✨ Added `get_workflow_versions` tool to list all versions
+- ✨ Added `rollback_workflow` tool to restore previous versions
+- 📁 Version history stored in `~/.workflows-mcp/versions/`
+
+### v0.2.1
 - ✨ Added template variable resolution (`{{variable}}` syntax)
 - ✨ Fixed branching logic to properly handle conditional steps
 - ✨ Enhanced create_workflow tool with comprehensive embedded documentation
@@ -388,7 +412,7 @@ npm run typecheck
 - [ ] Workflow marketplace
 - [ ] Visual workflow builder
 - [ ] Performance optimizations
-- [ ] Workflow versioning and rollback
+- [x] Workflow versioning and rollback
 
 ## 🤝 Contributing
 

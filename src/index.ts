@@ -73,6 +73,16 @@ const RunWorkflowStepSchema = z.object({
   next_step_needed: z.boolean(),
 });
 
+const GetWorkflowVersionsSchema = z.object({
+  workflow_id: z.string(),
+});
+
+const RollbackWorkflowSchema = z.object({
+  workflow_id: z.string(),
+  target_version: z.string(),
+  reason: z.string().optional(),
+});
+
 // Server implementation
 export class WorkflowMCPServer {
   private server: Server;
@@ -83,7 +93,7 @@ export class WorkflowMCPServer {
     this.server = new Server(
       {
         name: 'workflows-mcp',
-        version: '0.1.0',
+        version: '0.3.0',
       },
       {
         capabilities: {
@@ -123,6 +133,10 @@ export class WorkflowMCPServer {
             return await this.startWorkflow(args);
           case 'run_workflow_step':
             return await this.runWorkflowStep(args);
+          case 'get_workflow_versions':
+            return await this.getWorkflowVersions(args);
+          case 'rollback_workflow':
+            return await this.rollbackWorkflow(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -251,6 +265,16 @@ BEST PRACTICES:
         name: 'run_workflow_step',
         description: 'Execute the next step in an active workflow session',
         inputSchema: zodToJsonSchema(RunWorkflowStepSchema),
+      },
+      {
+        name: 'get_workflow_versions',
+        description: 'List all available versions of a workflow',
+        inputSchema: zodToJsonSchema(GetWorkflowVersionsSchema),
+      },
+      {
+        name: 'rollback_workflow',
+        description: 'Rollback a workflow to a previous version',
+        inputSchema: zodToJsonSchema(RollbackWorkflowSchema),
       },
     ];
   }
@@ -696,6 +720,69 @@ BEST PRACTICES:
     lines.push('- next_step_needed: true (or false if the workflow should end)');
     
     return lines.join('\n');
+  }
+
+  private async getWorkflowVersions(args: unknown) {
+    const parsed = GetWorkflowVersionsSchema.parse(args);
+    
+    const workflow = await this.storage.get(parsed.workflow_id);
+    if (!workflow) {
+      throw new Error(`Workflow not found: ${parsed.workflow_id}`);
+    }
+    
+    const versions = await this.storage.listVersions(parsed.workflow_id);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            workflow_id: parsed.workflow_id,
+            workflow_name: workflow.name,
+            current_version: workflow.version,
+            available_versions: versions,
+            version_count: versions.length,
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async rollbackWorkflow(args: unknown) {
+    const parsed = RollbackWorkflowSchema.parse(args);
+    
+    const workflow = await this.storage.get(parsed.workflow_id);
+    if (!workflow) {
+      throw new Error(`Workflow not found: ${parsed.workflow_id}`);
+    }
+    
+    const targetWorkflow = await this.storage.getVersion(parsed.workflow_id, parsed.target_version);
+    if (!targetWorkflow) {
+      throw new Error(`Version ${parsed.target_version} not found for workflow ${parsed.workflow_id}`);
+    }
+    
+    const success = await this.storage.rollback(parsed.workflow_id, parsed.target_version);
+    if (!success) {
+      throw new Error('Rollback failed');
+    }
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: true,
+            workflow_id: parsed.workflow_id,
+            workflow_name: workflow.name,
+            previous_version: workflow.version,
+            rolled_back_to: parsed.target_version,
+            reason: parsed.reason || 'No reason provided',
+            message: `Successfully rolled back "${workflow.name}" from v${workflow.version} to v${parsed.target_version}`,
+          }, null, 2),
+        },
+      ],
+    };
   }
 
   async start() {

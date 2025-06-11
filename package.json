@@ -1,6 +1,6 @@
 {
   "name": "@fiveohhwon/workflows-mcp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A Model Context Protocol (MCP) implementation for workflow management and automation.",
   "type": "module",
   "main": "dist/index.js",
