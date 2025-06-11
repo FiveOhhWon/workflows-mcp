@@ -135,8 +135,8 @@ export class WorkflowValidator {
       if ((data as any).steps) {
         const result = this.validateWorkflow({
           ...(data as Record<string, any>),
-          // Provide required fields for validation
-          id: 'temp-id',
+          // Provide required fields for validation with a valid UUID
+          id: '00000000-0000-0000-0000-000000000000',
           name: 'temp-name',
           description: 'temp',
           goal: 'temp',
