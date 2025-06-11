@@ -1,21 +1,36 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { homedir } from 'os';
 import { Workflow, WorkflowFilter, WorkflowSort } from '../types/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowStorage {
   private workflowsDir: string;
+  private importsDir: string;
 
-  constructor(baseDir: string = './workflows') {
-    this.workflowsDir = path.resolve(baseDir);
+  constructor(baseDir?: string) {
+    // Use a directory in the user's home directory by default
+    const base = baseDir || path.join(homedir(), '.workflows-mcp');
+    this.workflowsDir = path.join(base, 'workflows');
+    this.importsDir = path.join(base, 'imports');
   }
 
   async initialize(): Promise<void> {
+    // Create both workflows and imports directories
     try {
       await fs.access(this.workflowsDir);
     } catch {
       await fs.mkdir(this.workflowsDir, { recursive: true });
     }
+    
+    try {
+      await fs.access(this.importsDir);
+    } catch {
+      await fs.mkdir(this.importsDir, { recursive: true });
+    }
+    
+    // Import any workflows from the imports directory
+    await this.importWorkflows();
   }
 
   private getWorkflowPath(id: string): string {
@@ -170,5 +185,56 @@ export class WorkflowStorage {
 
     await this.save(workflow);
     return true;
+  }
+
+  private async importWorkflows(): Promise<void> {
+    try {
+      const files = await fs.readdir(this.importsDir);
+      const jsonFiles = files.filter(f => f.endsWith('.json'));
+      
+      for (const file of jsonFiles) {
+        try {
+          const filePath = path.join(this.importsDir, file);
+          const content = await fs.readFile(filePath, 'utf-8');
+          const workflow = JSON.parse(content) as Partial<Workflow>;
+          
+          // Generate new ID if missing or invalid
+          if (!workflow.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(workflow.id)) {
+            workflow.id = await this.generateId();
+          }
+          
+          // Ensure metadata exists
+          if (!workflow.metadata) {
+            workflow.metadata = {
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              times_run: 0,
+            };
+          }
+          
+          // Save to workflows directory
+          await this.save(workflow as Workflow);
+          
+          // Move file to processed subdirectory
+          const processedDir = path.join(this.importsDir, 'processed');
+          try {
+            await fs.access(processedDir);
+          } catch {
+            await fs.mkdir(processedDir, { recursive: true });
+          }
+          
+          await fs.rename(filePath, path.join(processedDir, `${workflow.id}-${file}`));
+          
+          console.error(`Imported workflow: ${workflow.name || file} (ID: ${workflow.id})`);
+        } catch (error) {
+          console.error(`Failed to import ${file}:`, error);
+        }
+      }
+    } catch (error) {
+      // Ignore errors if imports directory doesn't exist yet
+      if ((error as any).code !== 'ENOENT') {
+        console.error('Error importing workflows:', error);
+      }
+    }
   }
 }

@@ -1,0 +1,124 @@
+{
+  "name": "Simple File Processor",
+  "description": "Reads a file, processes its content, and saves the result",
+  "goal": "Transform file content according to user specifications",
+  "version": "1.0.0",
+  "tags": ["file", "processing", "example"],
+  "inputs": {
+    "input_file": {
+      "type": "string",
+      "description": "Path to the input file",
+      "required": true
+    },
+    "output_file": {
+      "type": "string", 
+      "description": "Path for the output file",
+      "required": true
+    },
+    "operation": {
+      "type": "string",
+      "description": "Operation to perform (uppercase, lowercase, count)",
+      "required": true,
+      "default": "uppercase"
+    }
+  },
+  "outputs": ["processed_content", "operation_result"],
+  "required_tools": ["read_file", "write_file"],
+  "steps": [
+    {
+      "id": 1,
+      "action": "tool_call",
+      "tool_name": "read_file",
+      "description": "Read the input file",
+      "parameters": {
+        "path": "{{input_file}}"
+      },
+      "save_result_as": "file_content",
+      "error_handling": "stop"
+    },
+    {
+      "id": 2,
+      "action": "validate",
+      "description": "Check if file content is valid",
+      "input_from": ["file_content"],
+      "criteria": "Ensure content is not empty and is text",
+      "save_result_as": "validation_result",
+      "error_handling": "stop"
+    },
+    {
+      "id": 3,
+      "action": "branch",
+      "description": "Choose operation based on input",
+      "conditions": [
+        {
+          "if": "operation === 'uppercase'",
+          "goto_step": 4
+        },
+        {
+          "if": "operation === 'lowercase'", 
+          "goto_step": 5
+        },
+        {
+          "if": "operation === 'count'",
+          "goto_step": 6
+        }
+      ],
+      "error_handling": "stop"
+    },
+    {
+      "id": 4,
+      "action": "transform",
+      "description": "Convert content to uppercase",
+      "input_from": ["file_content"],
+      "transformation": "Convert all text to uppercase",
+      "save_result_as": "processed_content",
+      "error_handling": "stop"
+    },
+    {
+      "id": 5,
+      "action": "transform",
+      "description": "Convert content to lowercase",
+      "input_from": ["file_content"],
+      "transformation": "Convert all text to lowercase",
+      "save_result_as": "processed_content",
+      "error_handling": "stop"
+    },
+    {
+      "id": 6,
+      "action": "analyze",
+      "description": "Count words and characters",
+      "input_from": ["file_content"],
+      "criteria": "Count total words, characters, lines, and provide basic statistics",
+      "save_result_as": "processed_content",
+      "error_handling": "stop"
+    },
+    {
+      "id": 7,
+      "action": "tool_call",
+      "tool_name": "write_file",
+      "description": "Save the processed content",
+      "parameters": {
+        "path": "{{output_file}}",
+        "content": "{{processed_content}}"
+      },
+      "save_result_as": "save_result",
+      "error_handling": "stop"
+    },
+    {
+      "id": 8,
+      "action": "compose",
+      "description": "Create operation summary",
+      "input_from": ["file_content", "processed_content", "operation"],
+      "save_result_as": "operation_summary",
+      "error_handling": "continue"
+    },
+    {
+      "id": 9,
+      "action": "notify",
+      "description": "Report completion",
+      "message": "File processing complete: {{operation}} operation applied to {{input_file}}, saved to {{output_file}}",
+      "save_result_as": "completion_notification",
+      "error_handling": "continue"
+    }
+  ]
+}

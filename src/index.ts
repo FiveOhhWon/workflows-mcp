@@ -9,22 +9,28 @@ import {
 import { z } from 'zod';
 import { WorkflowStorage } from './services/storage.js';
 import { WorkflowValidator } from './services/validator.js';
-import { Workflow } from './types/index.js';
+import { Workflow, WorkflowSession, Step } from './types/index.js';
 import { zodToJsonSchema } from './utils/zod-to-json-schema.js';
+import { v4 as uuidv4 } from 'uuid';
 
 // Tool schemas
 const CreateWorkflowSchema = z.object({
   workflow: z.object({
-    name: z.string(),
-    description: z.string(),
-    goal: z.string(),
-    version: z.string().optional(),
-    tags: z.array(z.string()).optional(),
-    inputs: z.record(z.any()).optional(),
-    outputs: z.array(z.string()).optional(),
-    required_tools: z.array(z.string()).optional(),
-    steps: z.array(z.any()),
-  }),
+    name: z.string().describe('Descriptive name for the workflow'),
+    description: z.string().describe('What this workflow accomplishes'),
+    goal: z.string().describe('The end result or desired outcome'),
+    version: z.string().optional().describe('Semantic version (default: "1.0.0")'),
+    tags: z.array(z.string()).optional().describe('Categories for organization'),
+    inputs: z.record(z.object({
+      type: z.enum(['string', 'number', 'boolean', 'array', 'object']),
+      description: z.string(),
+      required: z.boolean().default(true),
+      default: z.any().optional()
+    })).optional().describe('Input parameters the workflow accepts'),
+    outputs: z.array(z.string()).optional().describe('Names of output variables'),
+    required_tools: z.array(z.string()).optional().describe('MCP tools needed'),
+    steps: z.array(z.any()).describe('Workflow steps with actions'),
+  }).describe('Complete workflow definition'),
 });
 
 const ListWorkflowsSchema = z.object({
@@ -56,15 +62,22 @@ const DeleteWorkflowSchema = z.object({
   id: z.string(),
 });
 
-const RunWorkflowSchema = z.object({
+const StartWorkflowSchema = z.object({
   id: z.string(),
   inputs: z.record(z.any()).optional(),
+});
+
+const RunWorkflowStepSchema = z.object({
+  execution_id: z.string(),
+  step_result: z.any().optional(),
+  next_step_needed: z.boolean(),
 });
 
 // Server implementation
 export class WorkflowMCPServer {
   private server: Server;
   private storage: WorkflowStorage;
+  private sessions: Map<string, WorkflowSession>;
 
   constructor() {
     this.server = new Server(
@@ -80,6 +93,7 @@ export class WorkflowMCPServer {
     );
 
     this.storage = new WorkflowStorage();
+    this.sessions = new Map();
     this.setupHandlers();
   }
 
@@ -105,8 +119,10 @@ export class WorkflowMCPServer {
             return await this.updateWorkflow(args);
           case 'delete_workflow':
             return await this.deleteWorkflow(args);
-          case 'run_workflow':
-            return await this.runWorkflow(args);
+          case 'start_workflow':
+            return await this.startWorkflow(args);
+          case 'run_workflow_step':
+            return await this.runWorkflowStep(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -127,7 +143,83 @@ export class WorkflowMCPServer {
     return [
       {
         name: 'create_workflow',
-        description: 'Create a new workflow with specified steps and configuration',
+        description: `Create a new workflow with specified steps and configuration.
+
+WORKFLOW STRUCTURE:
+- name: Descriptive workflow name
+- description: What the workflow accomplishes
+- goal: The end result or outcome
+- version: Semantic version (default: "1.0.0")
+- tags: Array of categorization tags
+- inputs: Object defining input parameters with type, description, required, and optional default
+- outputs: Array of expected output variable names
+- required_tools: Array of MCP tools this workflow needs
+- steps: Array of workflow steps (see below)
+
+AVAILABLE ACTIONS:
+- tool_call: Execute an MCP tool (requires tool_name and parameters)
+- analyze: Analyze data and extract insights
+- consider: Evaluate options or possibilities  
+- research: Gather information on a topic
+- validate: Check data quality or correctness
+- summarize: Create a summary of information
+- decide: Make a decision based on criteria
+- wait_for_input: Request user input (requires prompt)
+- transform: Transform data (requires transformation description)
+- extract: Extract specific information
+- compose: Create new content
+- branch: Conditional branching (requires conditions array)
+- checkpoint: Save progress checkpoint
+- notify: Send a notification (requires message)
+- assert: Verify a condition (requires condition)
+- retry: Retry a previous step (requires step_id)
+
+STEP STRUCTURE:
+{
+  "id": 1, // Sequential number starting from 1
+  "action": "action_type",
+  "description": "What this step does",
+  "save_result_as": "variable_name", // Optional: save result
+  "error_handling": "stop|continue|retry", // Default: "stop"
+  
+  // For tool_call:
+  "tool_name": "mcp_tool_name",
+  "parameters": { "param": "value" },
+  
+  // For cognitive actions (analyze, consider, research, etc):
+  "input_from": ["variable1", "variable2"], // Input variables
+  "criteria": "Specific criteria or focus", // Optional
+  
+  // For branch:
+  "conditions": [
+    { "if": "variable.property > value", "goto_step": 5 }
+  ],
+  
+  // For wait_for_input:
+  "prompt": "Question for the user",
+  "input_type": "text|number|boolean|json",
+  
+  // For transform:
+  "transformation": "Description of transformation"
+}
+
+TEMPLATE VARIABLES:
+Use {{variable_name}} in any string field to reference:
+- Input parameters from workflow inputs
+- Results saved from previous steps via save_result_as
+- Any variables in the workflow state
+
+EXAMPLES:
+- "path": "output_{{format}}.txt"
+- "prompt": "Process {{count}} items?"
+- "description": "Analyzing {{filename}}"
+
+BEST PRACTICES:
+1. Each step should have a single, clear responsibility
+2. Use descriptive variable names for save_result_as
+3. Consider error handling for each step (stop, continue, or retry)
+4. Branch conditions should cover all cases
+5. Order steps logically with proper dependencies`,
         inputSchema: zodToJsonSchema(CreateWorkflowSchema),
       },
       {
@@ -151,9 +243,14 @@ export class WorkflowMCPServer {
         inputSchema: zodToJsonSchema(DeleteWorkflowSchema),
       },
       {
-        name: 'run_workflow',
-        description: 'Execute a workflow with optional input parameters',
-        inputSchema: zodToJsonSchema(RunWorkflowSchema),
+        name: 'start_workflow',
+        description: 'Start a workflow execution session with step-by-step control',
+        inputSchema: zodToJsonSchema(StartWorkflowSchema),
+      },
+      {
+        name: 'run_workflow_step',
+        description: 'Execute the next step in an active workflow session',
+        inputSchema: zodToJsonSchema(RunWorkflowStepSchema),
       },
     ];
   }
@@ -343,8 +440,8 @@ export class WorkflowMCPServer {
     };
   }
 
-  private async runWorkflow(args: unknown) {
-    const parsed = RunWorkflowSchema.parse(args);
+  private async startWorkflow(args: unknown) {
+    const parsed = StartWorkflowSchema.parse(args);
     
     const workflow = await this.storage.get(parsed.id);
     if (!workflow) {
@@ -362,65 +459,242 @@ export class WorkflowMCPServer {
       throw new Error(`Input validation failed: ${inputValidation.error}`);
     }
 
-    // Create execution instructions for the LLM
-    const instructions = this.generateExecutionInstructions(workflow, inputs);
+    // Create new execution session
+    const executionId = uuidv4();
+    const session: WorkflowSession = {
+      workflow_id: workflow.id,
+      execution_id: executionId,
+      workflow_name: workflow.name,
+      current_step_index: 0,
+      total_steps: workflow.steps.length,
+      variables: { ...inputs },
+      status: 'active',
+      started_at: new Date().toISOString(),
+    };
+
+    this.sessions.set(executionId, session);
+
+    // Generate instructions for the first step
+    const firstStep = workflow.steps[0];
+    const stepInstructions = this.generateStepInstructions(workflow, firstStep, session);
 
     return {
       content: [
         {
           type: 'text',
-          text: instructions,
+          text: stepInstructions,
         },
       ],
     };
   }
 
-  private generateExecutionInstructions(workflow: Workflow, inputs: Record<string, any>): string {
+  private async runWorkflowStep(args: unknown) {
+    const parsed = RunWorkflowStepSchema.parse(args);
+    
+    const session = this.sessions.get(parsed.execution_id);
+    if (!session) {
+      throw new Error(`No active workflow session found: ${parsed.execution_id}`);
+    }
+
+    const workflow = await this.storage.get(session.workflow_id);
+    if (!workflow) {
+      throw new Error(`Workflow not found: ${session.workflow_id}`);
+    }
+
+    // Store result from previous step if provided
+    if (parsed.step_result !== undefined && session.current_step_index > 0) {
+      const previousStep = workflow.steps[session.current_step_index - 1];
+      if (previousStep.save_result_as) {
+        session.variables[previousStep.save_result_as] = parsed.step_result;
+      }
+    }
+
+    // Check if workflow is complete
+    if (!parsed.next_step_needed || session.current_step_index >= workflow.steps.length) {
+      session.status = 'completed';
+      this.sessions.delete(parsed.execution_id);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              status: 'completed',
+              execution_id: parsed.execution_id,
+              message: `Workflow "${workflow.name}" completed successfully`,
+              final_variables: session.variables,
+            }, null, 2),
+          },
+        ],
+      };
+    }
+
+    // Check if the current step was a branch step
+    const currentStep = workflow.steps[session.current_step_index];
+    let nextStepIndex = session.current_step_index + 1;
+    
+    // Handle branching logic
+    if (currentStep.action === 'branch' && parsed.step_result) {
+      // Parse the branch result to find the target step
+      const branchResult = parsed.step_result.toString();
+      const gotoMatch = branchResult.match(/step (\d+)/i);
+      if (gotoMatch) {
+        const targetStep = parseInt(gotoMatch[1]);
+        // Find the index of the target step (steps are 1-indexed, array is 0-indexed)
+        nextStepIndex = workflow.steps.findIndex(s => s.id === targetStep);
+        if (nextStepIndex === -1) {
+          throw new Error(`Branch target step ${targetStep} not found`);
+        }
+      }
+    }
+    
+    // Update session with next step
+    session.current_step_index = nextStepIndex;
+    
+    if (session.current_step_index >= workflow.steps.length) {
+      session.status = 'completed';
+      this.sessions.delete(parsed.execution_id);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              status: 'completed',
+              execution_id: parsed.execution_id,
+              message: `Workflow "${workflow.name}" completed successfully`,
+              final_variables: session.variables,
+            }, null, 2),
+          },
+        ],
+      };
+    }
+
+    // Generate instructions for the next step
+    const nextStep = workflow.steps[session.current_step_index];
+    const stepInstructions = this.generateStepInstructions(workflow, nextStep, session);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: stepInstructions,
+        },
+      ],
+    };
+  }
+
+  private resolveTemplateVariables(template: string, variables: Record<string, any>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      if (variables.hasOwnProperty(varName)) {
+        const value = variables[varName];
+        return typeof value === 'string' ? value : JSON.stringify(value);
+      }
+      return match; // Keep the original if variable not found
+    });
+  }
+
+  private resolveTemplateInObject(obj: any, variables: Record<string, any>): any {
+    if (typeof obj === 'string') {
+      return this.resolveTemplateVariables(obj, variables);
+    } else if (Array.isArray(obj)) {
+      return obj.map(item => this.resolveTemplateInObject(item, variables));
+    } else if (obj && typeof obj === 'object') {
+      const resolved: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        resolved[key] = this.resolveTemplateInObject(value, variables);
+      }
+      return resolved;
+    }
+    return obj;
+  }
+
+  private generateStepInstructions(workflow: Workflow, step: Step, session: WorkflowSession): string {
     const lines: string[] = [];
     
-    lines.push('=== WORKFLOW EXECUTION INSTRUCTIONS ===');
+    lines.push('=== WORKFLOW STEP EXECUTION ===');
     lines.push('');
-    lines.push(`Workflow: ${workflow.name}`);
-    lines.push(`Goal: ${workflow.goal}`);
-    lines.push(`Description: ${workflow.description}`);
+    lines.push(`Workflow: ${workflow.name} (${session.execution_id})`);
+    lines.push(`Step ${session.current_step_index + 1} of ${session.total_steps}`);
     lines.push('');
-    lines.push('You will now execute this workflow step by step. Follow these guidelines:');
-    lines.push('1. Execute each step in order unless directed otherwise by branching logic');
-    lines.push('2. Store results in the specified variables when save_result_as is provided');
-    lines.push('3. Handle errors according to the error_handling directive');
-    lines.push('4. For cognitive actions (analyze, consider, etc.), use your reasoning capabilities');
-    lines.push('5. For tool_call actions, execute the specified tool with the given parameters');
+    lines.push(`Action: ${step.action.toUpperCase()}`);
+    lines.push(`Description: ${this.resolveTemplateVariables(step.description, session.variables)}`);
     lines.push('');
-    lines.push('Input Variables:');
-    for (const [key, value] of Object.entries(inputs)) {
-      lines.push(`  ${key} = ${JSON.stringify(value)}`);
-    }
-    lines.push('');
-    lines.push('=== WORKFLOW STEPS ===');
-    lines.push('');
-
-    for (const step of workflow.steps) {
-      lines.push(`Step ${step.id}: ${step.action.toUpperCase()}`);
-      lines.push(`Description: ${step.description}`);
-      
-      if (step.action === 'tool_call' && 'tool_name' in step && 'parameters' in step) {
-        lines.push(`Tool: ${step.tool_name}`);
-        lines.push(`Parameters: ${JSON.stringify(step.parameters)}`);
-      } else if ('input_from' in step && step.input_from) {
-        lines.push(`Input from: ${step.input_from.join(', ')}`);
+    
+    // Step-specific instructions
+    if (step.action === 'tool_call' && 'tool_name' in step && 'parameters' in step) {
+      lines.push('Execute the following tool:');
+      lines.push(`Tool: ${step.tool_name}`);
+      // Resolve template variables in parameters
+      const resolvedParams = this.resolveTemplateInObject(step.parameters, session.variables);
+      lines.push(`Parameters: ${JSON.stringify(resolvedParams, null, 2)}`);
+    } else if (step.action === 'analyze' || step.action === 'consider' || step.action === 'research' || 
+               step.action === 'validate' || step.action === 'summarize' || step.action === 'decide' ||
+               step.action === 'extract' || step.action === 'compose') {
+      lines.push(`Perform the cognitive action: ${step.action}`);
+      if ('input_from' in step && step.input_from) {
+        lines.push('Using input from:');
+        for (const varName of step.input_from) {
+          if (session.variables[varName] !== undefined) {
+            lines.push(`  ${varName}: ${JSON.stringify(session.variables[varName])}`);
+          }
+        }
       }
-      
-      if (step.save_result_as) {
-        lines.push(`Save result as: ${step.save_result_as}`);
+      if ('criteria' in step && step.criteria) {
+        lines.push(`Criteria: ${this.resolveTemplateVariables(step.criteria, session.variables)}`);
       }
-      
-      lines.push(`Error handling: ${step.error_handling}`);
-      lines.push('---');
+    } else if (step.action === 'wait_for_input' && 'prompt' in step) {
+      lines.push('Request input from the user:');
+      lines.push(`Prompt: ${this.resolveTemplateVariables(step.prompt, session.variables)}`);
+      if ('input_type' in step) {
+        lines.push(`Expected type: ${step.input_type}`);
+      }
+    } else if (step.action === 'transform' && 'transformation' in step) {
+      lines.push('Apply transformation:');
+      lines.push(this.resolveTemplateVariables(step.transformation, session.variables));
+      if ('input_from' in step && step.input_from) {
+        lines.push('To variables:');
+        for (const varName of step.input_from) {
+          if (session.variables[varName] !== undefined) {
+            lines.push(`  ${varName}: ${JSON.stringify(session.variables[varName])}`);
+          }
+        }
+      }
+    } else if (step.action === 'branch' && 'conditions' in step) {
+      lines.push('Evaluate conditions and determine next step:');
+      lines.push('');
+      for (const condition of step.conditions) {
+        lines.push(`IF ${condition.if} THEN GOTO step ${condition.goto_step}`);
+      }
+      lines.push('');
+      lines.push('Evaluate the conditions using the current variables and respond with:');
+      lines.push('- Which condition is true');
+      lines.push('- The step number to jump to (e.g., "Branching to step 8")');
+    } else if (step.action === 'notify' && 'message' in step) {
+      lines.push('Send notification:');
+      lines.push(`Message: ${this.resolveTemplateVariables(step.message, session.variables)}`);
+      if ('channel' in step && step.channel) {
+        lines.push(`Channel: ${this.resolveTemplateVariables(step.channel, session.variables)}`);
+      }
     }
-
+    
+    if (step.save_result_as) {
+      lines.push('');
+      lines.push(`Save the result as: ${step.save_result_as}`);
+    }
+    
     lines.push('');
-    lines.push('BEGIN EXECUTION NOW. Report the status and results of each step as you complete them.');
-
+    lines.push('Current variables:');
+    for (const [key, value] of Object.entries(session.variables)) {
+      lines.push(`  ${key}: ${JSON.stringify(value)}`);
+    }
+    
+    lines.push('');
+    lines.push('After completing this step, call run_workflow_step with:');
+    lines.push('- execution_id: ' + session.execution_id);
+    lines.push('- step_result: <the result of this step, if any>');
+    lines.push('- next_step_needed: true (or false if the workflow should end)');
+    
     return lines.join('\n');
   }
 

@@ -213,7 +213,7 @@ Workflows are JSON documents that define a series of steps for an LLM to execute
    }
    ```
 
-6. **run_workflow** - Execute a workflow
+6. **start_workflow** - Start a workflow execution session
    ```json
    {
      "id": "workflow-uuid",
@@ -222,19 +222,98 @@ Workflows are JSON documents that define a series of steps for an LLM to execute
      }
    }
    ```
+   Returns execution instructions for the first step and an execution_id.
+
+7. **run_workflow_step** - Execute the next step in the workflow
+   ```json
+   {
+     "execution_id": "execution-uuid",
+     "step_result": "result from previous step",
+     "next_step_needed": true
+   }
+   ```
+   Call this after completing each step to proceed through the workflow.
+
+## 🔄 Step-by-Step Execution
+
+The workflow system supports interactive, step-by-step execution similar to the sequential thinking tool:
+
+1. **Start a workflow** with `start_workflow` - returns the first step instructions
+2. **Execute the step** following the provided instructions  
+3. **Continue to next step** with `run_workflow_step`, passing:
+   - The `execution_id` from start_workflow
+   - Any `step_result` from the current step
+   - `next_step_needed: true` to continue (or false to end early)
+4. **Repeat** until the workflow completes
+
+Each step provides:
+- Clear instructions for what to do
+- Current variable state
+- Expected output format
+- Next step guidance
+
+### Template Variables
+
+The workflow system supports template variable substitution using `{{variable}}` syntax:
+
+- **In parameters**: `"path": "output_{{format}}.txt"` → `"path": "output_csv.txt"`
+- **In descriptions**: `"Processing {{count}} records"` → `"Processing 100 records"`
+- **In prompts**: `"Enter value for {{field}}"` → `"Enter value for email"`
+- **In transformations**: Variables are automatically substituted
+
+Template variables are resolved from the current workflow session variables, including:
+- Initial inputs provided to `start_workflow`
+- Results saved from previous steps via `save_result_as`
+- Any variables set during workflow execution
 
 ## 📚 Example Workflows
 
 ### Code Review Workflow
 Analyzes code quality, identifies issues, and provides improvement suggestions.
+- Sample data: `/workflows/examples/sample-data/sample-code-for-review.js`
 
 ### Data Processing Pipeline
 ETL workflow with validation, quality checks, and conditional branching.
+- Sample data: `/workflows/examples/sample-data/sample-data.csv`
 
 ### Research Assistant
 Gathers information, validates sources, and produces comprehensive reports.
 
-See the `/workflows/examples` directory for complete examples.
+### Simple File Processor
+Basic example showing file operations, branching, and transformations.
+
+See the `/workflows/examples` directory for complete workflow definitions.
+
+## 📁 Manual Workflow Import
+
+You can manually add workflows by placing JSON files in the imports directory:
+
+1. Navigate to `~/.workflows-mcp/imports/`
+2. Place your workflow JSON files there (any filename ending in `.json`)
+3. Start or restart the MCP server
+4. The workflows will be automatically imported with:
+   - A new UUID assigned if missing or invalid
+   - Metadata created if not present
+   - Original files moved to `imports/processed/` after successful import
+
+Example workflow file structure:
+```json
+{
+  "name": "My Custom Workflow",
+  "description": "A manually created workflow",
+  "goal": "Accomplish something specific",
+  "version": "1.0.0",
+  "steps": [
+    {
+      "id": 1,
+      "action": "tool_call",
+      "description": "First step",
+      "tool_name": "example_tool",
+      "parameters": {}
+    }
+  ]
+}
+```
 
 ## 🏗️ Architecture
 
@@ -247,6 +326,7 @@ workflows-mcp/
 │   └── index.ts        # MCP server implementation
 ├── workflows/
 │   └── examples/       # Example workflows
+│       └── sample-data/  # Sample data files for testing
 └── tests/              # Test suite
 ```
 
@@ -269,17 +349,44 @@ npm test
 npm run typecheck
 ```
 
+## 📝 Changelog
+
+### v0.2.1 (Latest)
+- ✨ Added template variable resolution (`{{variable}}` syntax)
+- ✨ Fixed branching logic to properly handle conditional steps
+- ✨ Enhanced create_workflow tool with comprehensive embedded documentation
+- 🐛 Fixed ES module import issues
+- 📁 Improved file organization with sample-data folder
+
+### v0.2.0
+- ✨ Implemented step-by-step workflow execution
+- ✨ Added `start_workflow` and `run_workflow_step` tools
+- ✨ Session management for workflow state
+- 🔄 Replaced `run_workflow` with interactive execution
+
+### v0.1.0
+- 🎉 Initial release
+- ✨ Core workflow engine
+- ✨ 16 action types
+- ✨ Import/export functionality
+- ✨ Example workflows
+
 ## 🔮 Roadmap
 
 - [x] Core workflow engine
 - [x] Basic action types
 - [x] Workflow validation
 - [x] Example workflows
-- [ ] Variable interpolation
-- [ ] Advanced error handling
+- [x] Step-by-step execution
+- [x] Variable interpolation
+- [x] Branching logic
+- [x] Import/export system
+- [ ] Advanced error handling and retry logic
+- [ ] Loop and parallel execution
 - [ ] Workflow marketplace
 - [ ] Visual workflow builder
 - [ ] Performance optimizations
+- [ ] Workflow versioning and rollback
 
 ## 🤝 Contributing
 

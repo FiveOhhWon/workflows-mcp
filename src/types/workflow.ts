@@ -97,6 +97,30 @@ export const ParallelStep = BaseStep.extend({
   wait_for_all: z.boolean().default(true),
 });
 
+// Additional step types for remaining actions
+export const CheckpointStep = BaseStep.extend({
+  action: z.literal('checkpoint'),
+  checkpoint_name: z.string(),
+});
+
+export const NotifyStep = BaseStep.extend({
+  action: z.literal('notify'),
+  message: z.string(),
+  channel: z.string().optional(),
+});
+
+export const AssertStep = BaseStep.extend({
+  action: z.literal('assert'),
+  condition: z.string(),
+  message: z.string().optional(),
+});
+
+export const RetryStep = BaseStep.extend({
+  action: z.literal('retry'),
+  step_id: z.number().positive(),
+  max_attempts: z.number().positive().default(3),
+});
+
 // Union of all step types
 export const Step = z.discriminatedUnion('action', [
   ToolCallStep,
@@ -106,7 +130,10 @@ export const Step = z.discriminatedUnion('action', [
   BranchStep,
   LoopStep,
   ParallelStep,
-  BaseStep, // For other action types not specifically defined
+  CheckpointStep,
+  NotifyStep,
+  AssertStep,
+  RetryStep,
 ]);
 
 export type Step = z.infer<typeof Step>;
@@ -166,6 +193,18 @@ export interface WorkflowExecutionState {
   started_at: string;
   completed_at?: string;
   error?: string;
+}
+
+// Workflow execution session for step-by-step execution
+export interface WorkflowSession {
+  workflow_id: string;
+  execution_id: string;
+  workflow_name: string;
+  current_step_index: number;
+  total_steps: number;
+  variables: Record<string, any>;
+  status: 'active' | 'completed' | 'failed';
+  started_at: string;
 }
 
 // Workflow filter options

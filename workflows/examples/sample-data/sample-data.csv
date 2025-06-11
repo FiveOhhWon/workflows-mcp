@@ -1,0 +1,31 @@
+id,name,email,age,department,salary,hire_date,status
+1,John Smith,john.smith@company.com,35,Engineering,95000,2020-01-15,active
+2,Jane Doe,jane.doe@company.com,28,Marketing,75000,2021-03-22,active
+3,Bob Wilson,bob.wilson@,42,Sales,,2019-05-10,active
+4,Alice Brown,alice.brown@company.com,-5,HR,65000,2022-02-28,active
+5,Charlie Davis,,31,Engineering,105000,2020-07-01,inactive
+6,Eva Martinez,eva.martinez@company.com,29,Marketing,72000,2021-11-15,active
+7,Frank Johnson,frank.j@company.com,55,Sales,120000,2018-04-05,active
+8,Grace Lee,grace.lee@company.com,26,HR,60000,2023-01-10,pending
+9,Henry Taylor,henry.taylor@company,38,Engineering,98000,2019-09-20,active
+10,Iris Chen,iris.chen@company.com,33,Marketing,78000,2020-12-01,active
+11,,not-an-email,45,Sales,95000,2017-06-15,
+12,Kevin Brown,kevin.brown@company.com,150,Engineering,110000,2021-08-30,active
+13,Laura White,laura.white@company.com,30,Unknown,70000,2022-05-18,active
+14,Mike Davis,mike.davis@company.com,32,Sales,85000,invalid-date,active
+15,Nancy Wilson,nancy.wilson@company.com,27,HR,62000,2023-03-01,active
+16,Oscar Garcia,oscar.garcia@company.com,41,Engineering,115000,2018-11-12,terminated
+17,Paula Miller,paula.miller@company.com,36,Marketing,80000,2020-06-25,active
+18,Quinn Anderson,quinn@company,29,Sales,75000,2021-09-08,active
+19,Rachel Thomas,rachel.thomas@company.com,34,HR,68000,2019-12-20,active
+20,Steve Martin,steve.martin@company.com,39,Engineering,-5000,2020-03-15,active
+21,Tina Jackson,tina.jackson@company.com,31,Marketing,76000,2022-07-10,active
+22,Uma Patel,uma.patel@company.com,28,Sales,73000,2021-10-05,active
+23,Victor Lee,victor.lee@company.com,44,Engineering,125000,2017-02-28,active
+24,Wendy Chen,wendy.chen@company.com,37,HR,71000,2019-08-14,active
+25,Xavier Rodriguez,xavier.r@company.com,40,Marketing,82000,2020-04-30,
+26,Yuki Tanaka,yuki.tanaka@company.com,32,Sales,79000,2021-06-20,active
+27,Zoe Williams,zoe.williams@company.com,29,Engineering,92000,2022-09-15,active
+28,Adam Jones,adam.jones@company.com,48,Unknown,88000,2018-01-25,active
+29,Beth Davis,beth.davis@company.com,35,HR,NULL,2020-11-10,active
+30,Carl Brown,carl.brown@company.com,31,Marketing,77000,2021-12-05,active
