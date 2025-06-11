@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { Workflow, WorkflowFilter, WorkflowSort } from '../types';
+import { Workflow, WorkflowFilter, WorkflowSort } from '../types/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export class WorkflowStorage {

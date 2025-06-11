@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Workflow } from '../types';
+import { Workflow } from '../types/index.js';
 
 export class WorkflowValidator {
   /**
