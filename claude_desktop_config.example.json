@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "workflows": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@fiveohwon/workflows-mcp"
+      ]
+    }
+  }
+}

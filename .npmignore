@@ -1,0 +1,39 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Config files
+tsconfig.json
+jest.config.js
+.gitignore
+.github/
+claude_desktop_config.example.json
+
+# Development
+node_modules/
+.env
+.env.*
+*.log
+coverage/
+tests/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitattributes
+
+# Documentation source
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+
+# Example workflows (they'll be in the npm package but not in the installed node_modules)
+# Keep workflows/examples/ for the package

@@ -4,6 +4,9 @@
   "description": "A Model Context Protocol (MCP) implementation for workflow management and automation.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "workflows-mcp": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -11,7 +14,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",

@@ -18,35 +18,80 @@ workflows-mcp transforms how AI assistants handle complex tasks by providing str
 
 ## 📦 Installation
 
-```bash
-npm install @fiveohwon/workflows-mcp
-```
-
-## 🏃 Quick Start
-
-### Starting the Server
+### Using npx (recommended)
 
 ```bash
-# Development
-npm run dev
-
-# Production
-npm run build && npm start
+npx @fiveohwon/workflows-mcp
 ```
 
-### MCP Configuration
+### From npm
 
-Add to your MCP client configuration:
+```bash
+npm install -g @fiveohwon/workflows-mcp
+```
+
+### From Source
+
+```bash
+git clone https://github.com/FiveOhhWon/workflows-mcp.git
+cd workflows-mcp
+npm install
+npm run build
+```
+
+## 🏃 Configuration
+
+### Claude Desktop
+
+Add this configuration to your Claude Desktop config file:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+#### Using npx (recommended):
+
+```json
+{
+  "mcpServers": {
+    "workflows": {
+      "command": "npx",
+      "args": ["-y", "@fiveohwon/workflows-mcp"]
+    }
+  }
+}
+```
+
+#### Using global install:
+
+```json
+{
+  "mcpServers": {
+    "workflows": {
+      "command": "workflows-mcp"
+    }
+  }
+}
+```
+
+#### Using local build:
 
 ```json
 {
   "mcpServers": {
     "workflows": {
       "command": "node",
-      "args": ["path/to/workflows-mcp/dist/index.js"]
+      "args": ["/absolute/path/to/workflows-mcp/dist/index.js"]
     }
   }
 }
+```
+
+### Development Mode
+
+For development with hot reload:
+
+```bash
+npm run dev
 ```
 
 ## 📖 Workflow Structure
