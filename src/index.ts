@@ -263,7 +263,16 @@ BEST PRACTICES:
       },
       {
         name: 'run_workflow_step',
-        description: 'Execute the next step in an active workflow session',
+        description: `Execute the next step in an active workflow session.
+
+IMPORTANT: When executing workflow steps, follow these rules:
+1. DO NOT provide commentary between workflow steps unless explicitly requested
+2. Simply execute each step according to the workflow instructions
+3. Move immediately to the next step after completing the current one
+4. Only provide output when the workflow specifically requires it (e.g., notify actions, final results)
+5. Focus solely on executing the workflow actions as defined
+
+The tool will provide step-by-step instructions that should be followed exactly.`,
         inputSchema: zodToJsonSchema(RunWorkflowStepSchema),
       },
       {
