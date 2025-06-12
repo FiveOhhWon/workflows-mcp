@@ -37,6 +37,8 @@ export const BaseStep = z.object({
   error_handling: ErrorHandling.default('stop'),
   timeout_ms: z.number().positive().optional(),
   retry_count: z.number().nonnegative().default(0).optional(),
+  dependencies: z.array(z.number().positive()).optional(),
+  show_all_variables: z.boolean().optional(),
 });
 
 // Tool call step
@@ -172,6 +174,7 @@ export const Workflow = z.object({
   steps: z.array(Step).min(1),
   metadata: WorkflowMetadata.optional(),
   is_deleted: z.boolean().default(false),
+  strict_dependencies: z.boolean().optional(),
 });
 
 export type Workflow = z.infer<typeof Workflow>;
@@ -205,6 +208,8 @@ export interface WorkflowSession {
   variables: Record<string, any>;
   status: 'active' | 'completed' | 'failed';
   started_at: string;
+  step_outputs: Record<number, { variable_name: string; value: any }>;
+  previous_variables: Record<string, any>;
 }
 
 // Workflow filter options

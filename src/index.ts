@@ -169,6 +169,9 @@ WORKFLOW STRUCTURE:
 - outputs: Array of expected output variable names
 - required_tools: Array of MCP tools this workflow needs
 - steps: Array of workflow steps (see below)
+- strict_dependencies: Boolean to enable strict dependency mode (default: false)
+  * false: Steps without dependencies see all variables (backward compatible)
+  * true: Steps without dependencies see NO variables (must explicitly declare dependencies)
 
 AVAILABLE ACTIONS:
 - tool_call: Execute an MCP tool (requires tool_name and parameters)
@@ -195,6 +198,8 @@ STEP STRUCTURE:
   "description": "What this step does",
   "save_result_as": "variable_name", // Optional: save result
   "error_handling": "stop|continue|retry", // Default: "stop"
+  "dependencies": [1, 3], // Optional: only show outputs from these step IDs
+  "show_all_variables": true, // Optional: override to show all variables
   
   // For tool_call:
   "tool_name": "mcp_tool_name",
@@ -228,12 +233,25 @@ EXAMPLES:
 - "prompt": "Process {{count}} items?"
 - "description": "Analyzing {{filename}}"
 
+DEPENDENCY MANAGEMENT:
+- Use "dependencies" array to specify which previous steps' outputs are needed
+- In strict_dependencies mode, steps without dependencies see NO variables
+- Steps with dependencies only see outputs from those specific steps + workflow inputs
+- Use "show_all_variables": true to override and see all variables for a specific step
+
+PERFORMANCE FEATURES:
+- Only relevant variables are shown based on dependencies (reduces token usage)
+- Variable changes are highlighted (+ for new, ~ for modified)
+- Only next 3 steps are previewed (progressive loading)
+
 BEST PRACTICES:
 1. Each step should have a single, clear responsibility
 2. Use descriptive variable names for save_result_as
 3. Consider error handling for each step (stop, continue, or retry)
 4. Branch conditions should cover all cases
-5. Order steps logically with proper dependencies`,
+5. Order steps logically with proper dependencies
+6. Use strict_dependencies for workflows with large/verbose outputs
+7. Explicitly declare dependencies to minimize context and improve performance`,
         inputSchema: zodToJsonSchema(CreateWorkflowSchema),
       },
       {
@@ -503,6 +521,8 @@ The tool will provide step-by-step instructions that should be followed exactly.
       variables: { ...inputs },
       status: 'active',
       started_at: new Date().toISOString(),
+      step_outputs: {},
+      previous_variables: {},
     };
 
     this.sessions.set(executionId, session);
@@ -538,6 +558,16 @@ The tool will provide step-by-step instructions that should be followed exactly.
     if (parsed.step_result !== undefined && session.current_step_index > 0) {
       const previousStep = workflow.steps[session.current_step_index - 1];
       if (previousStep.save_result_as) {
+        // Store in step outputs for dependency tracking
+        session.step_outputs[previousStep.id] = {
+          variable_name: previousStep.save_result_as,
+          value: parsed.step_result
+        };
+        
+        // Update previous_variables to track what was before this change
+        session.previous_variables = { ...session.variables };
+        
+        // Update current variables
         session.variables[previousStep.save_result_as] = parsed.step_result;
       }
     }
@@ -642,6 +672,63 @@ The tool will provide step-by-step instructions that should be followed exactly.
     return obj;
   }
 
+  private getVisibleVariables(workflow: Workflow, step: Step, session: WorkflowSession): Record<string, any> {
+    // Check if step overrides with show_all_variables
+    if ('show_all_variables' in step && step.show_all_variables) {
+      return session.variables;
+    }
+
+    // Determine default behavior based on workflow settings
+    const strictMode = workflow.strict_dependencies === true;
+    const hasDependencies = 'dependencies' in step && step.dependencies && step.dependencies.length > 0;
+
+    // If no dependencies specified
+    if (!hasDependencies) {
+      // In strict mode, show nothing. In normal mode, show everything
+      return strictMode ? {} : session.variables;
+    }
+
+    // Dependencies are specified - only show variables from those steps
+    const visibleVars: Record<string, any> = {};
+    
+    // Always include input variables
+    if (workflow.inputs) {
+      for (const inputName of Object.keys(workflow.inputs)) {
+        if (inputName in session.variables) {
+          visibleVars[inputName] = session.variables[inputName];
+        }
+      }
+    }
+
+    // Add variables from dependency steps
+    for (const stepId of step.dependencies!) {
+      const output = session.step_outputs[stepId];
+      if (output && output.variable_name in session.variables) {
+        visibleVars[output.variable_name] = session.variables[output.variable_name];
+      }
+    }
+
+    return visibleVars;
+  }
+
+  private getChangedVariables(session: WorkflowSession): { added: string[], modified: string[], unchanged: string[] } {
+    const added: string[] = [];
+    const modified: string[] = [];
+    const unchanged: string[] = [];
+
+    for (const [key, value] of Object.entries(session.variables)) {
+      if (!(key in session.previous_variables)) {
+        added.push(key);
+      } else if (JSON.stringify(value) !== JSON.stringify(session.previous_variables[key])) {
+        modified.push(key);
+      } else {
+        unchanged.push(key);
+      }
+    }
+
+    return { added, modified, unchanged };
+  }
+
   private generateStepInstructions(workflow: Workflow, step: Step, session: WorkflowSession): string {
     const lines: string[] = [];
     
@@ -716,10 +803,55 @@ The tool will provide step-by-step instructions that should be followed exactly.
       lines.push(`Save the result as: ${step.save_result_as}`);
     }
     
+    // Get visible variables based on dependencies
+    const visibleVariables = this.getVisibleVariables(workflow, step, session);
+    
+    // Show variable changes if we have previous state
+    if (session.current_step_index > 0 && Object.keys(session.previous_variables).length > 0) {
+      const changes = this.getChangedVariables(session);
+      
+      if (changes.added.length > 0 || changes.modified.length > 0) {
+        lines.push('');
+        lines.push('Variable changes:');
+        
+        for (const varName of changes.added) {
+          if (varName in visibleVariables) {
+            lines.push(`  + ${varName}: ${JSON.stringify(session.variables[varName])}`);
+          }
+        }
+        
+        for (const varName of changes.modified) {
+          if (varName in visibleVariables) {
+            lines.push(`  ~ ${varName}: ${JSON.stringify(session.variables[varName])}`);
+          }
+        }
+      }
+    }
+    
+    // Show current visible variables
     lines.push('');
-    lines.push('Current variables:');
-    for (const [key, value] of Object.entries(session.variables)) {
-      lines.push(`  ${key}: ${JSON.stringify(value)}`);
+    lines.push('Available variables:');
+    const visibleVarNames = Object.keys(visibleVariables);
+    if (visibleVarNames.length === 0) {
+      lines.push('  (none - use dependencies to access previous step outputs)');
+    } else {
+      for (const [key, value] of Object.entries(visibleVariables)) {
+        lines.push(`  ${key}: ${JSON.stringify(value)}`);
+      }
+    }
+    
+    // Show upcoming steps (progressive loading)
+    if (session.current_step_index < workflow.steps.length - 1) {
+      lines.push('');
+      lines.push('Upcoming steps:');
+      const maxPreview = Math.min(session.current_step_index + 3, workflow.steps.length);
+      for (let i = session.current_step_index + 1; i < maxPreview; i++) {
+        const upcomingStep = workflow.steps[i];
+        lines.push(`  ${i + 1}. ${upcomingStep.action}: ${upcomingStep.description}`);
+      }
+      if (maxPreview < workflow.steps.length) {
+        lines.push(`  ... and ${workflow.steps.length - maxPreview} more steps`);
+      }
     }
     
     lines.push('');
